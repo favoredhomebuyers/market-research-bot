@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+missing_counties.log
+data/*.csv
+
