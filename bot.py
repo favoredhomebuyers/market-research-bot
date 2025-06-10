@@ -4,12 +4,11 @@ import os
 import openai
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-import re
 
 # --- Setup for External APIs ---
 
 openai.api_key = os.environ.get('OPENAI_API_KEY')
-geolocator = Nominatim(user_agent="market_research_discord_bot_v4") # Updated user agent
+geolocator = Nominatim(user_agent="market_research_discord_bot_v5") # Updated user agent
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 
 
@@ -84,15 +83,11 @@ def analyze_market_with_ai(market_data: dict):
             temperature=0,
             max_tokens=50
         )
-        # Parse the response to get Market Type and Grade
         text = response.choices[0].message.content.strip()
         parts = text.split(',')
         if len(parts) == 2:
-            market_type = parts[0].strip()
-            investor_grade = parts[1].strip()
-            return market_type, investor_grade
+            return parts[0].strip(), parts[1].strip()
         else:
-            # Fallback if the model doesn't respond as expected
             return "N/A", "N/A"
     except Exception as e:
         print(f"An error occurred with the OpenAI API call: {e}")
@@ -110,12 +105,8 @@ def get_market_data(county_name: str):
             return county_data_row.iloc[0].to_dict()
         else:
             return None
-            
-    except FileNotFoundError:
-        print("CRITICAL ERROR: `merged_reventure_data.csv` not found.")
-        return None
     except Exception as e:
-        print(f"An error occurred in get_market_data: {e}")
+        print(f"Error in get_market_data: {e}")
         return None
 
 # --- Main Discord Bot Logic ---
@@ -136,68 +127,59 @@ async def on_message(message):
 
     if message.content.startswith('!market'):
         address = message.content.replace('!market', '').strip()
-        
         if not address:
             await message.channel.send("Please provide a full address.")
             return
 
-        status_message = await message.channel.send(f"**Working on it...**\n> 🌍 Geocoding address: `{address}`")
-
-        county_name = get_county_from_address(address)
+        status_message = await message.channel.send(f"Analyzing `{address}`...")
         
+        county_name = get_county_from_address(address)
         if not county_name:
             await status_message.edit(content=f"❌ Could not determine the county from `{address}`.")
             return
 
-        await status_message.edit(content=f"**Working on it...**\n> ✅ Found County: `{county_name}`\n> 📊 Retrieving data...")
         data = get_market_data(county_name)
-
         if data is None:
             await status_message.edit(content=f"❌ No data found for `{county_name}` in the CSV file.")
             return
         
-        await status_message.edit(content=f"**Working on it...**\n> ✅ Data retrieved!\n> 🤖 Sending to AI for analysis...")
         market_type, investor_grade = analyze_market_with_ai(data)
         
-        # --- NEW: Build the final embed with custom formatting ---
+        # --- NEW: Build the final output as a single, plain text message ---
         
-        # Format all the data strings first
-        population_str = f"Population: {data.get('Population'):,}" if pd.notna(data.get('Population')) else "Population: N/A"
-        pop_growth_str = f"Population Growth: {data.get('Population_Growth')}%" if pd.notna(data.get('Population_Growth')) else "Population Growth: N/A"
-        
-        days_on_market_str = f"Days on Market: {data.get('Days_on_Market')}" if pd.notna(data.get('Days_on_Market')) else "Days on Market: N/A"
-        dom_yoy_str = f"Days on Market Growth (YoY): {data.get('Days_On_Market_Growth_YoY')}%" if pd.notna(data.get('Days_On_Market_Growth_YoY')) else "Days on Market Growth (YoY): N/A"
-        sales_yoy_str = f"Home Sales Growth (YoY): {data.get('Home_Sales_Growth_YoY')}%" if pd.notna(data.get('Home_Sales_Growth_YoY')) else "Home Sales Growth (YoY): N/A"
-        inventory_yoy_str = f"Sale Inventory Growth (YoY): {data.get('Sale_Inventory_Growth_YoY')}%" if pd.notna(data.get('Sale_Inventory_Growth_YoY')) else "Sale Inventory Growth (YoY): N/A"
-        
-        home_value_str = f"Avg Home Value: ${data.get('Avg_Home_Value'):,.2f}" if pd.notna(data.get('Avg_Home_Value')) else "Avg Home Value: N/A"
-        cap_rate_str = f"Cap Rate %: {data.get('Cap_Rate')}%" if pd.notna(data.get('Cap_Rate')) else "Cap Rate %: N/A"
+        # 1. Create the title line
+        title_line = f"**{data.get('County')}: {investor_grade} ({market_type})**"
 
-        forecast_str = f"Home Price Forecast: {data.get('Home_Price_Forecast')}" if pd.notna(data.get('Home_Price_Forecast')) else "Home Price Forecast: N/A"
-        market_type_str = f"Market Type: {market_type}"
+        # 2. Format all data points into clean strings
+        market_stats = [
+            f"Days on Market: {data.get('Days_on_Market', 'N/A')}",
+            f"Days on Market Growth (YoY): {data.get('Days_On_Market_Growth_YoY', 'N/A')}%",
+            f"Home Sales Growth (YoY): {data.get('Home_Sales_Growth_YoY', 'N/A')}%",
+            f"Sale Inventory Growth (YoY): {data.get('Sale_Inventory_Growth_YoY', 'N/A')}%"
+        ]
+        demographic_stats = [
+            f"Population: {data.get('Population', 'N/A'):,}",
+            f"Population Growth: {data.get('Population_Growth', 'N/A')}%"
+        ]
+        investor_stats = [
+            f"Avg Home Value: ${data.get('Avg_Home_Value', 0):,.2f}",
+            f"Cap Rate %: {data.get('Cap_Rate', 'N/A')}%"
+        ]
+        scoring_stats = [
+            f"Home Price Forecast: {data.get('Home_Price_Forecast', 'N/A')}"
+        ]
         
-        # Assemble the description string with bold headers
-        description = (
-            f"**Market Stats**\n"
-            f"{days_on_market_str}\n{dom_yoy_str}\n{sales_yoy_str}\n{inventory_yoy_str}\n\n"
-            f"**Demographic Stats**\n"
-            f"{population_str}\n{pop_growth_str}\n\n"
-            f"**Investor Stats**\n"
-            f"{home_value_str}\n{cap_rate_str}\n\n"
-            f"**Scoring Stats**\n"
-            f"{forecast_str}\n{market_type_str}"
+        # 3. Assemble the final message string with bold headers
+        final_message_string = (
+            f"{title_line}\n\n"
+            f"**Market Stats**\n" + "\n".join(market_stats) + "\n\n"
+            f"**Demographic Stats**\n" + "\n".join(demographic_stats) + "\n\n"
+            f"**Investor Stats**\n" + "\n".join(investor_stats) + "\n\n"
+            f"**Scoring Stats**\n" + "\n".join(scoring_stats)
         )
         
-        # Create and send the final embed
-        final_embed = discord.Embed(
-            title=f"{data.get('County')}: {investor_grade}",
-            description=description,
-            color=discord.Color.green()
-        )
-        await message.channel.send(embed=final_embed)
-        
-        # Delete the original "Working on it..." message
-        await status_message.delete()
+        # 4. Edit the original status message to show the final result
+        await status_message.edit(content=final_message_string)
 
 # --- Run the Bot ---
 if BOT_TOKEN and openai.api_key:
