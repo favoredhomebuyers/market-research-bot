@@ -8,7 +8,7 @@ from geopy.extra.rate_limiter import RateLimiter
 # --- Setup for External APIs ---
 
 openai.api_key = os.environ.get('OPENAI_API_KEY')
-geolocator = Nominatim(user_agent="market_research_discord_bot_v7") # Updated user agent
+geolocator = Nominatim(user_agent="market_research_discord_bot_v8") # Updated user agent
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 
 
@@ -58,17 +58,24 @@ def analyze_market_with_ai(market_data: dict):
     Sends market data to OpenAI for a detailed analysis, including strengths,
     weaknesses, and sales talking points.
     """
+    # Now includes all data points for a more complete analysis by the AI
     data_string = (
         f"Days on Market: {market_data.get('Days_on_Market', 'N/A')}, "
         f"Home Sales Growth (YoY): {market_data.get('Home_Sales_Growth_YoY', 'N/A')}%, "
         f"Sale Inventory Growth (YoY): {market_data.get('Sale_Inventory_Growth_YoY', 'N/A')}%, "
         f"Population Growth: {market_data.get('Population_Growth', 'N/A')}%, "
-        f"Home Price Forecast: {market_data.get('Home_Price_Forecast', 'N/A')}"
+        f"Avg Home Value: ${market_data.get('Avg_Home_Value', 0):,.2f}, "
+        f"Home Value Growth (YoY): {market_data.get('Home_Value_Growth_YoY', 'N/A')}%, "
+        f"Cap Rate: {market_data.get('Cap_Rate', 'N/A')}%, "
+        f"Home Price Forecast: {market_data.get('Home_Price_Forecast', 'N/A')}, "
+        f"Inventory Surplus/Deficit: {market_data.get('Inventory_Surplus_Deficit', 'N/A')}%, "
+        f"Price Cut %: {market_data.get('Price_Cut_Percentage', 'N/A')}%, "
+        f"Vacancy Rate: {market_data.get('Vacancy_Rate', 'N/A')}%, "
+        f"Housing Unit Growth Rate: {market_data.get('Housing_Unit_Growth_Rate', 'N/A')}%"
     )
     
-    # Rephrased prompt to be safer and more focused
     prompt = f"""
-    You are an expert real estate investment analyst and sales coach.
+    You are an expert real estate investment analyst and sales coach for a virtual real estate wholesaling company. 
 
     **Market Data:**
     {data_string}
@@ -84,7 +91,7 @@ def analyze_market_with_ai(market_data: dict):
     **PART 2: Seller Conversation Starters**
     For a real estate wholesaler talking to a potential seller, create helpful questions and talking points based *only* on the market weaknesses you identified. The goal is to understand the seller's situation and present a fast cash offer as a convenient solution.
     1.  **To understand their motivation:** Suggest a question to uncover the seller's true reasons for selling (their "pain point").
-    2.  **To connect the weakness to them:** Suggest a question that links a market weakness (like high days on market) to their personal situation.
+    2.  **To connect the weakness to them:** Suggest a question that links a market weakness (like high days on market or high vacancy rate) to their personal situation.
     3.  **To highlight the implication:** Suggest a question that makes them consider the consequence of that problem.
     4.  **To frame your solution:** Suggest a statement that presents the wholesaler's offer as the easy way out.
 
@@ -115,7 +122,6 @@ def analyze_market_with_ai(market_data: dict):
         content = response.choices[0].message.content
         return content if content else "AI analysis returned empty. There might be an issue with the prompt or a content filter."
     except Exception as e:
-        # Provide a more detailed error message for debugging
         print(f"An error occurred with the OpenAI API call: {e}")
         return f"Error: Could not get analysis from AI. Details: {str(e)}"
 
@@ -165,37 +171,39 @@ async def on_message(message):
             await status_message.edit(content=f"❌ No data found for `{county_name}` in the CSV file.")
             return
         
-        # --- NEW: Display raw data first, then the AI analysis ---
-
-        # 1. Format the raw data points into a clean string
+        # --- NEW: Display all raw data points in the first message ---
+        
         raw_data_string = (
             f"**Market Stats**\n"
             f"Days on Market: {data.get('Days_on_Market', 'N/A')}\n"
             f"Days on Market Growth (YoY): {data.get('Days_On_Market_Growth_YoY', 'N/A')}%\n"
             f"Home Sales Growth (YoY): {data.get('Home_Sales_Growth_YoY', 'N/A')}%\n"
-            f"Sale Inventory Growth (YoY): {data.get('Sale_Inventory_Growth_YoY', 'N/A')}%\n\n"
+            f"Sale Inventory Growth (YoY): {data.get('Sale_Inventory_Growth_YoY', 'N/A')}%\n"
+            f"Inventory Surplus/Deficit: {data.get('Inventory_Surplus_Deficit', 'N/A')}%\n"
+            f"Price Cut %: {data.get('Price_Cut_Percentage', 'N/A')}%\n\n"
             f"**Demographic Stats**\n"
             f"Population: {data.get('Population', 'N/A'):,}\n"
-            f"Population Growth: {data.get('Population_Growth', 'N/A')}%\n\n"
+            f"Population Growth: {data.get('Population_Growth', 'N/A')}%\n"
+            f"Median Age: {data.get('Median_Age', 'N/A')}\n\n"
             f"**Investor Stats**\n"
             f"Avg Home Value: ${data.get('Avg_Home_Value', 0):,.2f}\n"
-            f"Cap Rate %: {data.get('Cap_Rate', 'N/A')}%\n\n"
+            f"Home Value Growth (YoY): {data.get('Home_Value_Growth_YoY', 'N/A')}%\n"
+            f"Cap Rate %: {data.get('Cap_Rate', 'N/A')}%\n"
+            f"Vacancy Rate: {data.get('Vacancy_Rate', 'N/A')}%\n"
+            f"Housing Unit Growth Rate: {data.get('Housing_Unit_Growth_Rate', 'N/A')}%\n\n"
             f"**Scoring Stats**\n"
             f"Home Price Forecast: {data.get('Home_Price_Forecast', 'N/A')}"
         )
         
-        # 2. Create an embed for the raw data
         data_embed = discord.Embed(
             title=f"Raw Data for {data.get('County')}",
             description=raw_data_string,
             color=discord.Color.light_grey()
         )
         
-        # 3. Edit the status message and send the raw data
         await status_message.edit(content="✅ Data found! Here are the stats:")
         await message.channel.send(embed=data_embed)
 
-        # 4. Get and send the AI analysis
         thinking_message = await message.channel.send("🤖 Now sending to AI for analysis and talking points...")
         ai_analysis = analyze_market_with_ai(data)
         
