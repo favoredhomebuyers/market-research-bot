@@ -95,6 +95,12 @@ def analyze_market_with_ai(market_data: dict):
     3.  **To highlight the implication:** Suggest a question that makes them consider the consequence of that problem.
     4.  **To frame your solution:** Suggest a statement that presents the wholesaler's offer as the easy way out.
 
+    **PART 3: Wholesaling Offer Strategy**
+    As an expert wholesaler, provide a strategic recommendation for making offers.
+    - **Approach:** State if the strategy should be "Cautious/Lower Offers" or "Aggressive/Higher Offers".
+    - **Justification:** Briefly explain why, referencing the market data.
+    - **Exit Strategy Note:** Mention how the market conditions might favor specific exit strategies like Novations, traditional Assignments, or Buy and Relist.
+
     Structure your response using the following headers.
 
     **Market Analysis**
