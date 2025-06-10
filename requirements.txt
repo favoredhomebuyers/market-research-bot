@@ -1,2 +1,4 @@
 pandas
 discord.py
+geopy
+openai
