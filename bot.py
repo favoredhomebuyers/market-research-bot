@@ -84,22 +84,20 @@ def analyze_market_with_ai(market_data: dict):
 
     **PART 1: Market Analysis**
     Provide a concise analysis of this market's health based on the data.
-    - **Strengths:** Identify 1-2 positive indicators from the data.
+    - **Strengths:** Identify 1-2 positive indicators.
     - **Weaknesses:** Identify 1-2 negative indicators that present challenges for a typical seller.
-    - **Overall Health:** A brief summary conclusion about the market.
+    - **Overall Health:** A brief summary conclusion.
 
     **PART 2: Seller Conversation Starters**
-    For a real estate wholesaler talking to a potential seller, create helpful questions and talking points based *only* on the market weaknesses you identified. The goal is to understand the seller's situation and present a fast cash offer as a convenient solution.
-    1.  **To understand their motivation:** Suggest a question to uncover the seller's true reasons for selling (their "pain point").
-    2.  **To connect the weakness to them:** Suggest a question that links a market weakness (like high days on market or high vacancy rate) to their personal situation.
-    3.  **To highlight the implication:** Suggest a question that makes them consider the consequence of that problem.
-    4.  **To frame your solution:** Suggest a statement that presents the wholesaler's offer as the easy way out.
+    Based *only* on the market weaknesses, create helpful questions to understand the seller's situation.
+    - **Motivation Question:** Suggest a question to uncover the seller's true reasons for selling.
+    - **Problem Question:** Suggest a question that links a market weakness to their personal situation.
 
     **PART 3: Wholesaling Offer Strategy**
-    As an expert wholesaler, provide a strategic recommendation for making offers.
+    Provide a strategic recommendation for making offers.
     - **Approach:** State if the strategy should be "Cautious/Lower Offers" or "Aggressive/Higher Offers".
     - **Justification:** Briefly explain why, referencing the market data.
-    - **Exit Strategy Note:** Mention how the market conditions might favor specific exit strategies like Novations, traditional Assignments, or Buy and Relist.
+    - **Exit Strategy Note:** Determine whether market conditions are more suited selling to cash investors or retail buyers or neither or both and why.  
 
     Structure your response using the following headers.
 
