@@ -88,12 +88,7 @@ def analyze_market_with_ai(market_data: dict):
     - **Weaknesses:** Identify 1-2 negative indicators that present challenges for a typical seller.
     - **Overall Health:** A brief summary conclusion.
 
-    **PART 2: Seller Conversation Starters**
-    Based *only* on the market weaknesses, create helpful questions to understand the seller's situation.
-    - **Motivation Question:** Suggest a question to uncover the seller's true reasons for selling.
-    - **Problem Question:** Suggest a question that links a market weakness to their personal situation.
-
-    **PART 3: Wholesaling Offer Strategy**
+    **PART 2: Wholesaling Offer Strategy**
     Provide a strategic recommendation for making offers.
     - **Approach:** State if the strategy should be "Cautious/Lower Offers" or "Aggressive/Higher Offers".
     - **Justification:** Briefly explain why, referencing the market data.
