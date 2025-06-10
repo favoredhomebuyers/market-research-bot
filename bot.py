@@ -101,11 +101,6 @@ def analyze_market_with_ai(market_data: dict):
     * **Weaknesses:**
     * **Overall Health:**
 
-    **Seller Conversation Starters**
-    * **Situationn Question:**
-    * **Problem Question:**
-    * **Implication Question:**
-    * **Need Payoff Question:**
     """
     
     try:
