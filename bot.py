@@ -8,7 +8,7 @@ from geopy.extra.rate_limiter import RateLimiter
 # --- Setup for External APIs ---
 
 openai.api_key = os.environ.get('OPENAI_API_KEY')
-geolocator = Nominatim(user_agent="market_research_discord_bot_v6") # Updated user agent
+geolocator = Nominatim(user_agent="market_research_discord_bot_v7") # Updated user agent
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 
 
@@ -56,22 +56,19 @@ def get_county_from_address(address: str):
 def analyze_market_with_ai(market_data: dict):
     """
     Sends market data to OpenAI for a detailed analysis, including strengths,
-    weaknesses, and sales talking points based on Sandler, SPIN, and NLP.
+    weaknesses, and sales talking points.
     """
-    # Create a clean string of the most relevant data for the AI prompt.
     data_string = (
         f"Days on Market: {market_data.get('Days_on_Market', 'N/A')}, "
         f"Home Sales Growth (YoY): {market_data.get('Home_Sales_Growth_YoY', 'N/A')}%, "
         f"Sale Inventory Growth (YoY): {market_data.get('Sale_Inventory_Growth_YoY', 'N/A')}%, "
         f"Population Growth: {market_data.get('Population_Growth', 'N/A')}%, "
-        f"Avg Home Value: ${market_data.get('Avg_Home_Value', 0):,.2f}, "
-        f"Cap Rate: {market_data.get('Cap_Rate', 'N/A')}%, "
         f"Home Price Forecast: {market_data.get('Home_Price_Forecast', 'N/A')}"
     )
     
-    # This is the new, much more detailed prompt.
+    # Rephrased prompt to be safer and more focused
     prompt = f"""
-    You are an expert real estate sales coach. Your task is to analyze market data and provide talking points for a real estate wholesaler on a call with a potential seller.
+    You are an expert real estate investment analyst and sales coach.
 
     **Market Data:**
     {data_string}
@@ -79,45 +76,48 @@ def analyze_market_with_ai(market_data: dict):
     ---
 
     **PART 1: Market Analysis**
-    Provide a concise analysis of this market's health.
+    Provide a concise analysis of this market's health based on the data.
     - **Strengths:** Identify 1-2 positive indicators from the data.
-    - **Weaknesses:** Identify 1-2 negative indicators that create selling challenges.
-    - **Overall Health:** A brief summary conclusion.
+    - **Weaknesses:** Identify 1-2 negative indicators that present challenges for a typical seller.
+    - **Overall Health:** A brief summary conclusion about the market.
 
-    **PART 2: Wholesaler Persuasion Script**
-    Based *only* on the market weaknesses you identified, create talking points and questions to influence a seller to accept a discounted, fast cash offer. Incorporate the following methods:
-    1.  **SPIN Selling:** Create questions to explore the seller's Situation, Problem, the Implication of that problem, and the Need-Payoff of a fast sale.
-    2.  **Sandler Method:** Suggest ways to uncover the seller's true "pain" or motivation beyond just the money.
-    3.  **NLP (Neuro-Linguistic Programming):** Use positive framing and influential language.
+    **PART 2: Seller Conversation Starters**
+    For a real estate wholesaler talking to a potential seller, create helpful questions and talking points based *only* on the market weaknesses you identified. The goal is to understand the seller's situation and present a fast cash offer as a convenient solution.
+    1.  **To understand their motivation:** Suggest a question to uncover the seller's true reasons for selling (their "pain point").
+    2.  **To connect the weakness to them:** Suggest a question that links a market weakness (like high days on market) to their personal situation.
+    3.  **To highlight the implication:** Suggest a question that makes them consider the consequence of that problem.
+    4.  **To frame your solution:** Suggest a statement that presents the wholesaler's offer as the easy way out.
 
-    Structure your response exactly as follows:
+    Structure your response using the following headers.
 
     **Market Analysis**
-    * **Strengths:** [Your analysis]
-    * **Weaknesses:** [Your analysis]
-    * **Overall Health:** [Your analysis]
+    * **Strengths:**
+    * **Weaknesses:**
+    * **Overall Health:**
 
-    **Wholesaler Talking Points**
-    * **Uncover Pain (Sandler):** [Your suggested question]
-    * **Explore Problem (SPIN):** [Your suggested question based on a weakness]
-    * **Amplify Implication (SPIN):** [Your suggested question about the consequence of the problem]
-    * **Frame the Solution (NLP):** [Your suggested statement]
+    **Seller Conversation Starters**
+    * **Motivation Question:**
+    * **Problem Question:**
+    * **Implication Question:**
+    * **Solution Framing:**
     """
     
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o", # Using a more advanced model for better results
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert real estate analyst and sales coach."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=450 # Increased tokens for a more detailed response
+            temperature=0.6,
+            max_tokens=500
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return content if content else "AI analysis returned empty. There might be an issue with the prompt or a content filter."
     except Exception as e:
+        # Provide a more detailed error message for debugging
         print(f"An error occurred with the OpenAI API call: {e}")
-        return "Error: Could not get an analysis from the AI."
+        return f"Error: Could not get analysis from AI. Details: {str(e)}"
 
 def get_market_data(county_name: str):
     """
@@ -126,11 +126,7 @@ def get_market_data(county_name: str):
     try:
         df = pd.read_csv('merged_reventure_data.csv')
         county_data_row = df[df['County'].str.lower() == county_name.lower()]
-
-        if not county_data_row.empty:
-            return county_data_row.iloc[0].to_dict()
-        else:
-            return None
+        return county_data_row.iloc[0].to_dict() if not county_data_row.empty else None
     except Exception as e:
         print(f"Error in get_market_data: {e}")
         return None
@@ -169,18 +165,47 @@ async def on_message(message):
             await status_message.edit(content=f"❌ No data found for `{county_name}` in the CSV file.")
             return
         
-        # Now, the analysis is the main payload.
-        ai_analysis = analyze_market_with_ai(data)
-        
-        # Assemble the final message
-        final_message = (
-            f"### Analysis for {data.get('County')}\n\n"
-            f"{ai_analysis}"
+        # --- NEW: Display raw data first, then the AI analysis ---
+
+        # 1. Format the raw data points into a clean string
+        raw_data_string = (
+            f"**Market Stats**\n"
+            f"Days on Market: {data.get('Days_on_Market', 'N/A')}\n"
+            f"Days on Market Growth (YoY): {data.get('Days_On_Market_Growth_YoY', 'N/A')}%\n"
+            f"Home Sales Growth (YoY): {data.get('Home_Sales_Growth_YoY', 'N/A')}%\n"
+            f"Sale Inventory Growth (YoY): {data.get('Sale_Inventory_Growth_YoY', 'N/A')}%\n\n"
+            f"**Demographic Stats**\n"
+            f"Population: {data.get('Population', 'N/A'):,}\n"
+            f"Population Growth: {data.get('Population_Growth', 'N/A')}%\n\n"
+            f"**Investor Stats**\n"
+            f"Avg Home Value: ${data.get('Avg_Home_Value', 0):,.2f}\n"
+            f"Cap Rate %: {data.get('Cap_Rate', 'N/A')}%\n\n"
+            f"**Scoring Stats**\n"
+            f"Home Price Forecast: {data.get('Home_Price_Forecast', 'N/A')}"
         )
         
-        # Edit the status message to show the final result
-        # Note: Discord has a 2000 character limit for messages. This detailed analysis should fit.
-        await status_message.edit(content=final_message)
+        # 2. Create an embed for the raw data
+        data_embed = discord.Embed(
+            title=f"Raw Data for {data.get('County')}",
+            description=raw_data_string,
+            color=discord.Color.light_grey()
+        )
+        
+        # 3. Edit the status message and send the raw data
+        await status_message.edit(content="✅ Data found! Here are the stats:")
+        await message.channel.send(embed=data_embed)
+
+        # 4. Get and send the AI analysis
+        thinking_message = await message.channel.send("🤖 Now sending to AI for analysis and talking points...")
+        ai_analysis = analyze_market_with_ai(data)
+        
+        analysis_embed = discord.Embed(
+            title="AI Analysis & Conversation Starters",
+            description=ai_analysis,
+            color=discord.Color.blue()
+        )
+        await thinking_message.edit(content="", embed=analysis_embed)
+
 
 # --- Run the Bot ---
 if BOT_TOKEN and openai.api_key:
