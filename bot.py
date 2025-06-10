@@ -8,15 +8,26 @@ from geopy.extra.rate_limiter import RateLimiter
 # --- Setup for External APIs ---
 
 # 1. OpenAI API Setup
-# The key is loaded securely from the environment variables you set in Render.
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 # 2. Geopy (Geocoder) Setup
-# We use Nominatim, a free geocoding service based on OpenStreetMap data.
-# A custom user-agent is required for their API policy.
-geolocator = Nominatim(user_agent="market_research_discord_bot")
-# RateLimiter prevents sending requests too quickly, which is also part of their policy.
+geolocator = Nominatim(user_agent="market_research_discord_bot_v2")
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+
+# --- Helper Dictionary for State Name Conversion ---
+states_map = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+    'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH',
+    'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
+    'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA',
+    'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN',
+    'texas': 'TX', 'utah': 'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA',
+    'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC'
+}
 
 
 # --- Core Bot Functions ---
@@ -24,17 +35,23 @@ geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 def get_county_from_address(address: str):
     """
     Takes a full street address and uses a geocoder to find the county.
+    **UPDATED** to convert full state names to two-letter abbreviations.
     """
     try:
         location = geolocator.geocode(address, addressdetails=True, language="en")
-        # The county information is usually found in the 'address' part of the response.
         if location and location.raw.get('address', {}).get('county'):
-            county = location.raw['address']['county']
-            # We also need the state abbreviation to make the county name unique.
-            state = location.raw['address'].get('state', '')
-            # The data is often in "CountyName County" format, so we remove the redundant part.
-            county = county.replace(" County", "").strip()
-            return f"{county}, {state}"
+            raw_address = location.raw['address']
+            county = raw_address['county'].replace(" County", "").strip()
+            
+            # Get the full state name and convert it to its abbreviation
+            state_full_name = raw_address.get('state', '').lower()
+            state_abbr = states_map.get(state_full_name) # Use the dictionary to look up the abbreviation
+
+            if state_abbr:
+                return f"{county}, {state_abbr}"
+            else:
+                # Fallback in case the state isn't in our map
+                return f"{county}, {state_full_name.upper()}"
         else:
             return None
     except Exception as e:
@@ -45,10 +62,7 @@ def analyze_market_with_ai(market_data: dict):
     """
     Sends the market data to OpenAI's GPT model for analysis and scoring.
     """
-    # Create a clean string of data to send to the AI.
     data_string = ", ".join([f"{key}: {value}" for key, value in market_data.items()])
-    
-    # This is the "prompt" that tells the AI exactly what to do.
     prompt = f"""
     Based on the following real estate market data, please perform two tasks:
     1. Determine if it is a "Buyer's Market" or a "Seller's Market". A seller's market typically has low inventory, low days on market, and high price growth. A buyer's market is the opposite.
@@ -63,7 +77,6 @@ def analyze_market_with_ai(market_data: dict):
     Market Data:
     {data_string}
     """
-    
     try:
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -82,8 +95,7 @@ def analyze_market_with_ai(market_data: dict):
 
 def get_market_data_and_format(county_name: str):
     """
-    This function now only retrieves the data and formats the initial embed.
-    The AI analysis is handled separately.
+    This function retrieves the data and formats the initial embed.
     """
     try:
         df = pd.read_csv('merged_reventure_data.csv')
@@ -92,7 +104,6 @@ def get_market_data_and_format(county_name: str):
         if not county_data_row.empty:
             data = county_data_row.iloc[0].to_dict()
             
-            # This dictionary will be sent to the AI.
             data_for_ai = {
                 "County": data.get("County"),
                 "Population": data.get("Population"),
@@ -106,7 +117,6 @@ def get_market_data_and_format(county_name: str):
                 "Home Price Forecast": data.get("Home_Price_Forecast")
             }
             
-            # This embed contains the raw data for the user to see.
             embed = discord.Embed(title=f"Market Data for {data.get('County')}", color=discord.Color.light_grey())
             for key, value in data_for_ai.items():
                 embed.add_field(name=key, value=value if pd.notna(value) else "N/A", inline=True)
@@ -145,8 +155,6 @@ async def on_message(message):
             await message.channel.send("Please provide a full address (e.g., `!market 155 Edinburg Dr, Kannapolis NC 28083`).")
             return
 
-        # --- New Workflow ---
-        # 1. Get County from Address
         await message.channel.send(f"Geocoding address: **{address}**...")
         county_name = get_county_from_address(address)
         
@@ -154,26 +162,21 @@ async def on_message(message):
             await message.channel.send("Could not determine the county from that address. Please try a different format.")
             return
 
-        # 2. Get Data from CSV
         await message.channel.send(f"Found County: **{county_name}**. Retrieving data...")
         data_for_ai, data_embed = get_market_data_and_format(county_name)
 
         if data_for_ai is None:
-            # Check if an error embed was returned
             if data_embed:
                 await message.channel.send(embed=data_embed)
             else:
                  await message.channel.send(f"No data found for **{county_name}** in the CSV file.")
             return
         
-        # Send the raw data first
         await message.channel.send(embed=data_embed)
 
-        # 3. Get AI Analysis
         await message.channel.send("Sending data to AI for analysis...")
         ai_analysis = analyze_market_with_ai(data_for_ai)
 
-        # 4. Send AI Analysis
         analysis_embed = discord.Embed(title="AI Market Analysis", description=ai_analysis, color=discord.Color.blue())
         await message.channel.send(embed=analysis_embed)
 
